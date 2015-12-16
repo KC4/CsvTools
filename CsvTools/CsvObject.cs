@@ -9,9 +9,7 @@ using System.Threading.Tasks;
 
 namespace CsvTools
 {
-    public class CsvObject
-    {
-        //The Csv in before parsing, for now
+    //The Csv in before parsing, for now
         //Eventually will be sanitized csv
         private string Csv;
         //The Data table that holds the csv data
@@ -32,12 +30,59 @@ namespace CsvTools
         /// Convert the datatable to quoted csv format
         /// </summary>
         /// <remarks>UNIMPLEMENTED</remarks>
-        /// <param name="quoted"></param>
         /// <returns></returns>
-        public string ToCSV(bool quoted)
+        public string ToCSV()
         {
-            throw new ApplicationException("Not Yet Implemented");
+            var listTuple = this.ToList();
+            var headers = listTuple.Item1;
+            var list = listTuple.Item2;
+            var newCsv = new StringBuilder();
+            foreach (var header in headers)
+            {
+                newCsv.AppendFormat("\"{0}\",", header);
+            }
+            newCsv.Remove(newCsv.Length - 1, 1);
+            foreach (var line in list)
+            {
+                foreach (var item in line)
+                {
+                    newCsv.AppendFormat("\"{0}\",", item);
+                }
+                newCsv.Remove(newCsv.Length - 1, 1);
+                newCsv.AppendLine();
+            }
+            return newCsv.ToString();
         }
+
+        /// <summary>
+        /// Convert the datatable to quoted csv format
+        /// </summary>
+        /// <remarks>UNIMPLEMENTED</remarks>
+        /// <param name="selectRequest"></param>
+        /// <returns></returns>
+        public string ToCSV(string[] selectRequest)
+        {
+            var listTuple = this.ToList(selectRequest);
+            var headers = listTuple.Item1;
+            var list = listTuple.Item2;
+            var newCsv = new StringBuilder();
+            foreach(var header in headers)
+            {
+                newCsv.AppendFormat("\"{0}\",", header);
+            }
+            newCsv.Remove(newCsv.Length - 1, 1);
+            foreach(var line in list)
+            {
+                foreach(var item in line)
+                {
+                    newCsv.AppendFormat("\"{0}\",", item);
+                }
+                newCsv.Remove(newCsv.Length - 1, 1);
+                newCsv.AppendLine();
+            }
+            return newCsv.ToString();
+        }
+        
 
         /// <summary>
         /// Get the data table from the object
@@ -49,13 +94,100 @@ namespace CsvTools
         }
 
         /// <summary>
+        /// Creates a new data table derived from the csvobject that contains only wanted columns
+        /// </summary>
+        /// <param name="selectRequest"></param>
+        /// <returns></returns>
+        public DataTable ToDataTable(string[] selectRequest)
+        {
+            var newDataTable = new DataTable();
+            foreach(var item in selectRequest)
+            {
+                newDataTable.Columns.Add(item, typeof(string));
+            }
+            foreach(DataRow row in dataStore.Rows)
+            {
+                var newRow = newDataTable.NewRow();
+                foreach(DataColumn col in newDataTable.Columns)
+                {
+                    newRow[col.ColumnName] = row.Field<string>(col.ColumnName);
+                }
+                newDataTable.Rows.Add(newRow);
+            }
+            return newDataTable;
+        }
+
+        /// <summary>
+        /// Converts the current CsvObject to a tuple containing headers and a list of the lines
+        /// </summary>
+        /// <returns></returns>
+        public Tuple<string[], List<string[]>> ToList()
+        {
+            var rowList = new List<string[]>();
+            var columnsCount = dataStore.Columns.Count;
+            var headers = new string[columnsCount];
+            for( int i = 0; i < columnsCount; ++i )
+            {
+                headers[i] = dataStore.Columns[i].ColumnName;
+            }
+            foreach(DataRow row in dataStore.Rows)
+            {
+                string[] listEntry = new string[columnsCount];
+                var location = 0;
+                foreach(DataColumn column in dataStore.Columns)
+                {
+                    if(row[column] != DBNull.Value)
+                    {
+                        listEntry[location] = (string)row[column];
+                    }
+                    ++location;
+                }
+                rowList.Add(listEntry);
+            }
+            var returnTuple = Tuple.Create<string[], List<string[]>>(headers, rowList);
+            return returnTuple;
+        }
+
+        /// <summary>
+        /// Converts the current CsvObject into a Tuple containing the headers and a list of the lines
+        /// </summary>
+        /// <param name="selectRequest">An Array of column names</param>
+        public Tuple<string[], List<string[]>> ToList(string[] selectRequest)
+        {
+            var rowList = new List<string[]>();
+            var tempTable = this.ToDataTable(selectRequest);
+            var columnsCount = tempTable.Columns.Count;
+            var headers = new string[columnsCount];
+            //Create the String[] of headers
+            for (int i = 0; i < columnsCount; ++i)
+            {
+                headers[i] = tempTable.Columns[i].ColumnName;
+            }
+            //Create the List of rows
+            foreach (DataRow row in tempTable.Rows)
+            {
+                string[] listEntry = new string[columnsCount];
+                var location = 0;
+                foreach (DataColumn column in tempTable.Columns)
+                {
+                    listEntry[location] = (string)row[column];
+                    ++location;
+                }
+                rowList.Add(listEntry);
+            }
+            //Create the tuple
+            var returnTuple = Tuple.Create<string[], List<string[]>>(headers, rowList);
+            return returnTuple;
+        }
+
+        /// <summary>
         /// Load a csv file into an object
         /// </summary>
         /// <param name="filePath"></param>
         /// <returns></returns>
         public static CsvObject Load(string filePath)
         {
-            if(File.Exists(filePath))
+            if (File.Exists(filePath))
             {
                 var csvFileText = File.ReadAllText(filePath);
                 return new CsvObject(csvFileText);
@@ -78,10 +210,10 @@ namespace CsvTools
             //Separate the header and the rows
             var isHeader = true;
             //Iterate over the lines
-            while((row = stringReader.ReadLine()) != null)
+            while ((row = stringReader.ReadLine()) != null)
             {
                 //If it's the header
-                if(isHeader)
+                if (isHeader)
                 {
                     ParseHeader(row);
                     isHeader = false;
@@ -110,7 +242,7 @@ namespace CsvTools
             //Keep track of which column in the row we're writing to 
             var location = 0;
             //Loop through all the characters in the row
-            for(int i = 0; i < row.Length; ++i)
+            for (int i = 0; i < row.Length; ++i)
             {
                 //If it's a quotation mark
                 if (row[i] == '"')
@@ -158,16 +290,16 @@ namespace CsvTools
             //Hold the value of the current column
             var columnName = "";
             //Loop through all the characters
-            for(int i = 0; i < header.Length; ++i)
+            for (int i = 0; i < header.Length; ++i)
             {
                 //If it's a quotation mark
-                if(header[i] == '"')
+                if (header[i] == '"')
                 {
                     //Toggle the quote flag
                     quote = !quote;
                 }
                 //If it's a comma and not inside of a quote
-                else if((header[i] == ',') && !quote)
+                else if ((header[i] == ',') && !quote)
                 {
                     //Add the column to the data store
                     dataStore.Columns.Add(columnName.Trim(), typeof(string));
@@ -182,7 +314,7 @@ namespace CsvTools
                 }
             }
             // If there is still a column name to add
-            if(columnName != "")
+            if (columnName != "")
             {
                 //Add the Column to the data store
                 dataStore.Columns.Add(columnName.Trim(), typeof(string));
